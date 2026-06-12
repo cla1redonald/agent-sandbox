@@ -32,6 +32,10 @@ pi-safe                  # /opt/homebrew/bin/pi-safe:
 Inside pi, `/model` to switch between `qwen3-coder-64k` (default coder) and
 `qwen2.5:32b`. All inference is local — zero API cost, nothing leaves the machine.
 
+New here? Try the 5-minute worked example:
+**[examples/vault-linter](examples/vault-linter)** — have the sandboxed agent
+build a small tool, then verify its output against known answers.
+
 Sandbox **any other agent** the same way, e.g. Claude Code:
 
 ```sh
