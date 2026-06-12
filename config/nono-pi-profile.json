@@ -1,0 +1,30 @@
+{
+  "extends": "node-dev",
+  "meta": {
+    "name": "pi",
+    "description": "pi coding agent against local Ollama - workdir rw, pi state, git config"
+  },
+  "groups": {
+    "include": []
+  },
+  "workdir": {
+    "access": "readwrite"
+  },
+  "filesystem": {
+    "allow": [
+      "~/.pi"
+    ],
+    "read": [
+      "~/.gitconfig",
+      "~/.config/git"
+    ]
+  },
+  "network": {
+    "allow_domain": [
+      "localhost:11434"
+    ],
+    "open_port": [
+      11434
+    ]
+  }
+}

@@ -1,0 +1,3 @@
+#!/bin/sh
+# Sandboxed pi coding agent (local Ollama) - see ~/code/agent-sandbox/README.md
+exec nono run --profile pi --allow-cwd -- pi --provider ollama --model qwen3-coder-64k "$@"
