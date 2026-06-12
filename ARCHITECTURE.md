@@ -116,7 +116,8 @@ ollama create qwen3-coder-64k -f Modelfile        # rebuild the 64K variant
 # inside pi:  /model   to switch models,  /exit   to quit
 ```
 
-## Machine
+## Hardware notes
 
-Apple M4 Pro, 48GB unified memory. `qwen3-coder-64k` ≈ 18GB weights + ~6GB KV
-cache at 64K context — comfortable, with room for the OS and a browser.
+Runs on Apple Silicon with 48GB+ unified memory. `qwen3-coder-64k` ≈ 18GB
+weights + ~6GB KV cache at 64K context — comfortable, with room for the OS and
+a browser. More RAM lets you raise `num_ctx` or run larger models.

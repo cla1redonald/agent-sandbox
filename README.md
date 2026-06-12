@@ -1,10 +1,16 @@
 # Local Agentic AI Sandbox
 
-Safe local setup for running coding agents, following
-[Willem van den Ende's local agentic dev setup](https://willemvandenende.com/blog/engineering/my-local-agentic-dev-setup-today),
-adapted for this machine (M4 Pro, 48GB) — Ollama instead of llama.cpp.
+**Run AI coding agents on a local model (nothing leaves the machine, zero API
+cost), wrapped in a kernel-level sandbox so a misbehaving agent can only touch
+the folder you point it at — not your SSH keys, passwords, or anything else.**
 
-Set up 2026-06-12.
+New here? Read **[ARCHITECTURE.md](ARCHITECTURE.md)** for how it all fits
+together (with a diagram) and why. This README is the day-to-day usage guide.
+
+Built following
+[Willem van den Ende's local agentic dev setup](https://willemvandenende.com/blog/engineering/my-local-agentic-dev-setup-today),
+adapted for an Apple Silicon Mac (48GB+ unified memory) — Ollama instead of
+llama.cpp. Set up 2026-06-12.
 
 ## The stack
 
@@ -64,8 +70,9 @@ Useful nono commands: `nono audit` (what did the agent touch),
 - `~/.pi/agent/models.json` — pi → Ollama provider config
 - `./Modelfile` — rebuilds the 64K-context model: `ollama create qwen3-coder-64k -f Modelfile`
 
-## Memory budget (48GB)
+## Memory budget
 
-`qwen3-coder-64k` ≈ 18GB weights + ~6GB KV cache at 64K — comfortable.
-To try a bigger context, edit `num_ctx` in `Modelfile` and re-run
-`ollama create`; 128K will still fit but leaves less headroom for the OS.
+`qwen3-coder-64k` ≈ 18GB weights + ~6GB KV cache at 64K context — comfortable
+on a 48GB machine. To try a bigger context, edit `num_ctx` in `Modelfile` and
+re-run `ollama create`; 128K will still fit on 48GB but leaves less headroom
+for the OS.
