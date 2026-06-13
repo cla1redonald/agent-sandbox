@@ -19,8 +19,11 @@ const THINK_OVERRIDE = /(^|\s)\/think\b/i;
 const CODE_OVERRIDE = /(^|\s)\/code\b/i;
 
 // Only fire heuristics when confident; otherwise fall through to the classifier.
+// Includes explicit "reason about this" phrasings so a mixed prompt (e.g. "refactor
+// X — think carefully about complexity") trips BOTH hint sets and defers to the
+// classifier instead of being short-circuited to the coder by a lone code keyword.
 const THINK_HINTS =
-  /\b(prove|proof|step[- ]by[- ]step|reason through|logic puzzle|riddle|how many|fewest|minimum number|optimal|why does|explain why|brain ?teaser)\b/i;
+  /\b(prove|proof|step[- ]by[- ]step|reason (through|about)|think (carefully|hard|through|deeply)|trade[- ]?offs?|logic puzzle|riddle|how many|fewest|minimum number|optimal|why does|explain why|brain ?teaser)\b/i;
 const CODE_HINTS =
   /\b(refactor|rename|add (a |an )?(function|test|param|endpoint)|implement|write (a |an )?(function|file|script|test|class)|fix (the|this)|edit|format|lint|stack ?trace|compile|typescript|npm|import)\b/i;
 
