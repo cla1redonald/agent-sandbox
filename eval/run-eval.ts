@@ -29,7 +29,7 @@ const ATTEMPTS = 3; // best-of-N for stability; task passes on majority
 const TEMP = 0.2; // small, so the N attempts actually sample
 const NUM_PREDICT = 6144; // bound runtime (thinking models can ramble)
 
-type Task = {
+export type Task = {
   id: string;
   kind: "coding" | "reasoning-easy" | "reasoning-hard";
   prompt: string;
@@ -159,7 +159,7 @@ const LONGDOC = (() => {
   return filler.slice(0, half) + "\nNOTE: The access code for vault 7 is MARMALADE-42.\n" + filler.slice(half);
 })();
 
-const TASKS: Task[] = [
+export const TASKS: Task[] = [
   {
     id: "lis-algorithm",
     kind: "reasoning-easy",
@@ -312,4 +312,5 @@ async function main() {
   console.log(md);
 }
 
-main();
+// run only when invoked directly (so the router can import TASKS without running the eval)
+if ((process.argv[1] ?? "").endsWith("run-eval.ts")) main();

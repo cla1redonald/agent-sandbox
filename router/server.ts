@@ -1,23 +1,26 @@
 #!/usr/bin/env -S tsx
 /**
- * Model router proxy — PHASE 1: streaming pass-through (no routing yet).
+ * Model router proxy — PHASE 2: decider wired in (immediate switch, no hysteresis).
  *
- * An OpenAI-compatible endpoint that pi points at instead of Ollama. For now it
- * forwards EVERY request to the coder and relays the response stream verbatim —
- * the point of Phase 1 is to prove the streaming bridge end-to-end before any
- * routing logic goes on top (Phase 2+).
+ * An OpenAI-compatible endpoint that pi points at instead of Ollama. It classifies
+ * each request (override → heuristic → llama3.1:8b) and forwards to the coder or
+ * the thinker, relaying the response stream verbatim.
  *
  * Runs on the HOST (trusted infra, like Ollama itself) — not inside nono.
  *   tsx router/server.ts        # then: curl localhost:11500/health
  *
- * Phase 2 adds the decider; Phase 3 hysteresis + thinker leash; Phase 4 the
- * pi-safe auto-spawn + nono profile. See docs/router-plan.md.
+ * Phase 3 adds hysteresis + the thinker wall-clock leash; Phase 4 the pi-safe
+ * auto-spawn + nono profile. See docs/router-plan.md.
  */
 import { createServer, type IncomingMessage } from "node:http";
+import { decide, type Route } from "./decide.ts";
 
 const PORT = Number(process.env.ROUTER_PORT ?? 11500);
 const OLLAMA = process.env.OLLAMA_URL ?? "http://localhost:11434";
-const CODER = "qwen3-coder-64k"; // Phase 1: everything goes here
+const MODEL: Record<Route, string> = {
+  coder: "qwen3-coder-64k",
+  thinker: "qwen3.6-64k",
+};
 
 async function readBody(req: IncomingMessage): Promise<string> {
   const chunks: Buffer[] = [];
@@ -25,11 +28,23 @@ async function readBody(req: IncomingMessage): Promise<string> {
   return Buffer.concat(chunks).toString("utf8");
 }
 
+// last user turn — what the decider classifies on
+function lastUserMessage(body: any): string {
+  const msgs = Array.isArray(body?.messages) ? body.messages : [];
+  for (let i = msgs.length - 1; i >= 0; i--) {
+    if (msgs[i]?.role === "user") {
+      const c = msgs[i].content;
+      return typeof c === "string" ? c : JSON.stringify(c);
+    }
+  }
+  return "";
+}
+
 const server = createServer(async (req, res) => {
   try {
     if (req.method === "GET" && req.url === "/health") {
       res.writeHead(200, { "content-type": "application/json" });
-      res.end(JSON.stringify({ status: "ok", phase: 1, routesTo: CODER }));
+      res.end(JSON.stringify({ status: "ok", phase: 2, models: MODEL }));
       return;
     }
 
@@ -38,7 +53,10 @@ const server = createServer(async (req, res) => {
       let body: any = {};
       try { body = JSON.parse(raw); } catch { /* forward as-is below */ }
       const requested = body.model ?? "(none)";
-      body.model = CODER; // Phase 1: no routing — always the coder
+
+      const { route, reason } = await decide(lastUserMessage(body));
+      body.model = MODEL[route];
+      body.think = route === "thinker"; // thinker reasons; coder stays direct
 
       const upstream = await fetch(`${OLLAMA}/v1/chat/completions`, {
         method: "POST",
@@ -59,7 +77,7 @@ const server = createServer(async (req, res) => {
       }
       res.end();
       process.stderr.write(
-        `[router] ${requested} -> ${CODER} | stream=${!!body.stream} | ${upstream.status}\n`,
+        `[router] ${requested} -> ${route}/${body.model} (${reason}) | stream=${!!body.stream} | ${upstream.status}\n`,
       );
       return;
     }
@@ -74,5 +92,7 @@ const server = createServer(async (req, res) => {
 });
 
 server.listen(PORT, "127.0.0.1", () =>
-  process.stderr.write(`[router] listening on http://127.0.0.1:${PORT} (phase 1: pass-through -> ${CODER})\n`),
+  process.stderr.write(
+    `[router] listening on http://127.0.0.1:${PORT} (phase 2: coder=${MODEL.coder} thinker=${MODEL.thinker})\n`,
+  ),
 );
