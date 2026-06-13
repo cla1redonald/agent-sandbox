@@ -33,6 +33,22 @@
           "maxTokens": 8192
         }
       ]
+    },
+    "router": {
+      "baseUrl": "http://localhost:11500/v1",
+      "api": "openai-completions",
+      "apiKey": "ollama",
+      "models": [
+        {
+          "id": "auto",
+          "name": "Auto (router picks coder <-> thinker)",
+          "reasoning": false,
+          "input": ["text"],
+          "cost": { "input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0 },
+          "contextWindow": 65536,
+          "maxTokens": 16384
+        }
+      ]
     }
   }
 }

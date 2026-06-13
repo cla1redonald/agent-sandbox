@@ -1,3 +1,31 @@
 #!/bin/sh
-# Sandboxed pi coding agent (local Ollama) - see ~/code/agent-sandbox/README.md
-exec nono run --profile pi --allow-cwd -- pi --provider ollama --model qwen3-coder-64k "$@"
+# Sandboxed pi coding agent (local Ollama) — see ~/code/agent-sandbox/README.md
+# Default: auto-routes coder<->thinker via the local router proxy (auto-spawned).
+# Set PI_NO_ROUTER=1 to bypass the router and run the fast coder directly.
+ROUTER_DIR="$HOME/code/agent-sandbox/router"
+ROUTER_URL="http://localhost:11500"
+
+direct() {
+  exec nono run --profile pi --allow-cwd -- pi --provider ollama --model qwen3-coder-64k "$@"
+}
+
+[ -n "$PI_NO_ROUTER" ] && direct "$@"
+
+# Bring the router proxy up if it isn't already (host infra, outside the sandbox).
+if ! curl -s --max-time 2 "$ROUTER_URL/health" >/dev/null 2>&1; then
+  echo "pi-safe: starting model router on :11500…" >&2
+  (cd "$ROUTER_DIR" && nohup tsx server.ts >/tmp/pi-router.log 2>&1 &)
+  i=0
+  while [ "$i" -lt 30 ]; do
+    sleep 0.5
+    curl -s --max-time 2 "$ROUTER_URL/health" >/dev/null 2>&1 && break
+    i=$((i + 1))
+  done
+fi
+
+if curl -s --max-time 2 "$ROUTER_URL/health" >/dev/null 2>&1; then
+  exec nono run --profile pi --allow-cwd -- pi --provider router --model auto "$@"
+fi
+
+echo "pi-safe: router unavailable (see /tmp/pi-router.log); using direct coder" >&2
+direct "$@"
