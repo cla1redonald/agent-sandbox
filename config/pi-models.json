@@ -7,7 +7,7 @@
       "models": [
         {
           "id": "qwen3-coder-64k",
-          "name": "Qwen3 Coder 30B-A3B (64K ctx, local)",
+          "name": "Qwen3 Coder 30B-A3B (64K, local) - CODER / fast default",
           "reasoning": false,
           "input": ["text"],
           "cost": { "input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0 },
@@ -15,8 +15,17 @@
           "maxTokens": 16384
         },
         {
+          "id": "qwen3.6-64k",
+          "name": "Qwen3.6 35B-A3B (64K, local) - THINKER / hard reasoning",
+          "reasoning": true,
+          "input": ["text"],
+          "cost": { "input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0 },
+          "contextWindow": 65536,
+          "maxTokens": 16384
+        },
+        {
           "id": "qwen2.5:32b",
-          "name": "Qwen 2.5 32B (local)",
+          "name": "Qwen 2.5 32B (local) - smaller fallback",
           "reasoning": false,
           "input": ["text"],
           "cost": { "input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0 },

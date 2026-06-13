@@ -1,2 +1,15 @@
-FROM qwen3-coder:30b
+# Two-model setup (build both):
+#
+#   The CODER (fast default, for bulk/agentic loops) — Qwen3-Coder 30B-A3B, 64K ctx:
+#     printf 'FROM qwen3-coder:30b\nPARAMETER num_ctx 65536\n' | ollama create qwen3-coder-64k -f -
+#
+#   The THINKER (on-demand, for hard reasoning) — Qwen3.6 35B-A3B, 64K ctx — this file:
+#     ollama create qwen3.6-64k -f Modelfile
+#
+# Qwen3.6 is a hybrid reasoning model: it "thinks" by default (slower, ~18 tok/s,
+# verbose), which is what we want from the thinker. Note: a `SYSTEM /no_think`
+# directive does NOT reliably suppress it — only the runtime flag `--think=false`
+# (or pi's reasoning:false) does. So we keep thinking ON here and use qwen3-coder
+# for the fast path instead.
+FROM qwen3.6:35b-a3b
 PARAMETER num_ctx 65536
