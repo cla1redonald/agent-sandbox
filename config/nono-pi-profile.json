@@ -21,10 +21,12 @@
   },
   "network": {
     "allow_domain": [
-      "localhost:11434"
+      "localhost:11434",
+      "localhost:11500"
     ],
     "open_port": [
-      11434
+      11434,
+      11500
     ]
   }
 }

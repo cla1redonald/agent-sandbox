@@ -10,7 +10,11 @@ together (with a diagram) and why. This README is the day-to-day usage guide.
 Built following
 [Willem van den Ende's local agentic dev setup](https://willemvandenende.com/blog/engineering/my-local-agentic-dev-setup-today),
 adapted for an Apple Silicon Mac (48GB+ unified memory) — Ollama instead of
-llama.cpp. Set up 2026-06-12.
+llama.cpp. Set up 2026-06-12. On 2026-06-13 a second model was added — a
+*thinker* (Qwen3.6) alongside the fast *coder* (Qwen3-Coder) — after a
+head-to-head eval ([eval/](eval/)) showed each wins a different class of task.
+See [ARCHITECTURE.md](ARCHITECTURE.md#model-two-models-the-coder-and-the-thinker)
+for the split and which alternatives were rejected.
 
 ## The stack
 
@@ -18,7 +22,8 @@ llama.cpp. Set up 2026-06-12.
 |---|---|---|
 | [nono](https://nono.sh) 0.62 | Kernel-level (Seatbelt) capability sandbox for agents | `brew install nono` |
 | Ollama 0.24 | Local inference, OpenAI-compatible API on `localhost:11434` | already installed |
-| `qwen3-coder-64k` | Qwen3-Coder 30B-A3B (MoE, 3.3B active) with 64K context | built from `Modelfile` here |
+| `qwen3-coder-64k` | **The coder** (fast default) — Qwen3-Coder 30B-A3B, 64K ctx | built from `Modelfile` |
+| `qwen3.6-64k` | **The thinker** (hard reasoning) — Qwen3.6 35B-A3B, 64K ctx | built from `Modelfile` |
 | [pi](https://pi.dev) 0.79 | Coding agent CLI, pointed at Ollama | `npm i -g --ignore-scripts @earendil-works/pi-coding-agent` |
 
 ## Daily use
@@ -29,8 +34,24 @@ pi-safe                  # /opt/homebrew/bin/pi-safe:
                          # nono run --profile pi --allow-cwd -- pi --provider ollama --model qwen3-coder-64k
 ```
 
-Inside pi, `/model` to switch between `qwen3-coder-64k` (default coder) and
-`qwen2.5:32b`. All inference is local — zero API cost, nothing leaves the machine.
+Starts on the fast **coder**. Inside pi, `/model` switches to `qwen3.6-64k` (the
+**thinker**) or `qwen2.5:32b` (smaller fallback). All inference is local — zero
+API cost, nothing leaves the machine.
+
+### Which model when
+
+The eval ([eval/RESULTS.md](eval/RESULTS.md)) measured where each one wins:
+
+| Use | Model | Why |
+|---|---|---|
+| Bulk/agentic coding, edits, loops, anything simple | **`qwen3-coder-64k`** (coder) | ~2× faster, 0 timeouts, nails coding + format constraints |
+| Hard multi-step reasoning, logic/math, tricky problems | **`qwen3.6-64k`** (thinker) | uniquely solves the reasoning traps the coder fails — but slower & verbose |
+| Local reasoning over sensitive data | **`qwen3.6-64k`** (thinker) | strongest reasoning, and it never leaves the machine |
+
+Rule of thumb: **default to the coder; reach for the thinker only when a task
+genuinely needs deep reasoning.** The thinker is 2× slower, ~19× more verbose,
+and can run away — don't use it for routine work. (Automating this choice is the
+[router](docs/router-spec.md), greenlit by the eval but not yet built.)
 
 New here? Try the 5-minute worked example:
 **[examples/vault-linter](examples/vault-linter)** — have the sandboxed agent
@@ -72,11 +93,15 @@ Useful nono commands: `nono audit` (what did the agent touch),
 
 - `~/.config/nono/profiles/pi.json` — sandbox profile
 - `~/.pi/agent/models.json` — pi → Ollama provider config
-- `./Modelfile` — rebuilds the 64K-context model: `ollama create qwen3-coder-64k -f Modelfile`
+- `./Modelfile` — rebuilds the 64K-context **thinker**: `ollama create qwen3.6-64k -f Modelfile`. The header comments also show the one-liner that builds the **coder** (`qwen3-coder-64k`).
 
 ## Memory budget
 
-`qwen3-coder-64k` ≈ 18GB weights + ~6GB KV cache at 64K context — comfortable
-on a 48GB machine. To try a bigger context, edit `num_ctx` in `Modelfile` and
-re-run `ollama create`; 128K will still fit on 48GB but leaves less headroom
-for the OS.
+Only one model is resident at a time (`/model` swaps them):
+
+- **coder** `qwen3-coder-64k` ≈ 18GB weights, ~24GB loaded at 64K — very comfortable on 48GB.
+- **thinker** `qwen3.6-64k` ≈ 23GB weights, ~28GB loaded at 64K — fits with room for the OS, but tighter, so close heavy apps for big thinker runs.
+
+If you hit memory pressure on the thinker, drop `num_ctx` in `Modelfile` and
+re-run `ollama create`, or just stay on the coder. 128K context is not a safe
+default for the thinker on 48GB.

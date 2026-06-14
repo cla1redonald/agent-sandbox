@@ -3,7 +3,9 @@
 This documents how my local agentic coding setup works, so I (or anyone) can
 understand and explain it. Set up 2026-06-12, inspired by
 [Willem van den Ende's local agentic dev setup](https://willemvandenende.com/blog/engineering/my-local-agentic-dev-setup-today),
-adapted for my machine.
+adapted for my machine. On 2026-06-13 a second model — a *thinker* (Qwen3.6)
+— was added alongside the fast *coder* (Qwen3-Coder) after a head-to-head eval;
+see [the model section](#model-two-models-the-coder-and-the-thinker).
 
 ## The one-sentence version
 
@@ -38,7 +40,8 @@ passwords, or the rest of my system.
 │   │           │                                    │     │
 │   │           ▼  asks the model what to do          │     │
 │   │  ┌──────────────────────────────────────┐      │     │
-│   │  │  Ollama  →  qwen3-coder-64k           │      │     │
+│   │  │  Ollama  →  qwen3-coder-64k (default) │      │     │
+│   │  │      or    qwen3.6-64k  (the thinker) │      │     │
 │   │  │  Local inference on localhost:11434   │      │     │
 │   │  └──────────────────────────────────────┘      │     │
 │   └───────────────────────────────────────────────┘     │
@@ -53,7 +56,8 @@ passwords, or the rest of my system.
 |---|---|---|
 | **nono** 0.62 | The sandbox. Enforces what the agent can touch, at the kernel level. | `brew install nono`. Uses macOS Seatbelt; the policy is irrevocable once applied. |
 | **Ollama** 0.24 | Runs the model locally, exposes an OpenAI-compatible API on `localhost:11434`. | Already installed. |
-| **qwen3-coder-64k** | The model — Qwen3-Coder 30B-A3B (mixture-of-experts, ~3.3B active), given a 64K context window. | Built from `Modelfile` here. ~18GB. |
+| **qwen3-coder-64k** | The CODER (fast default) — Qwen3-Coder 30B-A3B (MoE, ~3.3B active), 64K context. | Built from `Modelfile`. ~18GB. |
+| **qwen3.6-64k** | The THINKER (hard reasoning) — Qwen3.6 35B-A3B (MoE, ~3B active), 64K context, hybrid reasoning. | Built from `Modelfile`. ~23GB. Added 2026-06-13. |
 | **pi** 0.79 | The coding agent — the thing that actually reads files, edits, runs commands. | `npm i -g --ignore-scripts @earendil-works/pi-coding-agent`. Pointed at Ollama. |
 
 ## Why this stack (and what the alternatives were)
@@ -95,23 +99,55 @@ Each piece was a deliberate choice. Here's the reasoning and the roads not taken
   this setup exists for: privacy (data leaves the machine) and zero cost. They
   remain the right tool for hard reasoning; see the split below.
 
-### Model: Qwen3-Coder 30B-A3B — vs dense models, smaller/bigger, other families
+### Model: two models — the coder and the thinker
 
-- **Why this one:** it's a *mixture-of-experts* model — 30B total parameters
-  but only ~3.3B active per token — so it runs fast and light on 48GB while
-  punching well above its memory footprint. It's tuned for *agentic* coding
-  (tool use, multi-step edits), natively handles very long context, and the
-  weights are open.
-- **A dense 30B** (e.g. Qwen2.5 32B, also installed here as a fallback) is
-  often a touch stronger per-token but slower and heavier in memory for similar
-  quality — the MoE wins on speed-per-GB.
-- **Smaller models** (7–8B, like the llama3.1:8b kept here) are faster and fine
-  for trivial edits but noticeably weaker at multi-step agent work.
-- **Bigger models** (70B+) are better but need far more RAM than 48GB allows at
-  a usable speed.
-- **Other families** (DeepSeek-Coder, Codestral, etc.) are reasonable
-  alternatives; Qwen3-Coder currently leads open agentic-coding benchmarks,
-  which is why it's the default.
+The sandbox launched (2026-06-12) on **Qwen3-Coder 30B-A3B**. When **Qwen3.6
+35B-A3B** (the current-gen Qwen, a hybrid *reasoning* model) appeared, the
+obvious move was to "upgrade." Instead I **evalled it head-to-head** — and the
+result said *don't replace, add*. So the setup now runs two models:
+
+- **`qwen3-coder-64k` — the CODER (fast default).** Direct, no thinking, ~18GB.
+- **`qwen3.6-64k` — the THINKER (on demand).** Hybrid reasoning, ~23GB.
+
+**Why both, not one (the eval — [eval/](../eval/)):** a 10-task ground-truth
+benchmark, both models, run inside the sandbox. Both scored 8/10 overall, but
+split by *kind*:
+
+| Kind | coder | thinker |
+|---|---|---|
+| coding | **4/4** | 3/4 |
+| reasoning-easy | **2/2** | 1/2 |
+| reasoning-hard | 2/4 | **4/4** |
+
+The coder wins everyday work and is ~2× faster (43 vs 20 tok/s), ~19× less
+verbose (95 vs 1,780 tokens/task), with 0 timeouts. The thinker uniquely solves
+the hard-reasoning traps (bat-and-ball, non-greedy coins) the coder fails — but
+it's slower, far more verbose, *worse* on some easy tasks (it failed LIS), and
+ran away to a timeout once. Neither dominates → keep both, default to the coder,
+escalate to the thinker only for genuinely hard reasoning. Automating that choice
+is the [router](../docs/router-spec.md) (greenlit by the eval, not yet built).
+
+**Discovery worth recording:** Qwen3.6 *thinks by default* and `num_predict`
+does **not** cap thinking tokens, so it can monologue for minutes on a trivial
+task. A `SYSTEM /no_think` Modelfile directive does **not** reliably suppress it
+— only the runtime `--think=false` flag (or pi's `reasoning:false`) does. That's
+why the fast path is a separate coder model, not Qwen3.6 in no-think mode.
+
+**Why these two and not the other candidates:**
+
+| Model | Fit on 48GB | Why / why not |
+|---|---|---|
+| **Qwen3-Coder 30B-A3B (MoE)** ← *coder* | ~18GB, very comfortable | Fast MoE (~3.3B active), coding-tuned, no thinking overhead. Won the eval's coding + easy tasks and is 2× faster. The default. |
+| **Qwen3.6 35B-A3B (MoE)** ← *thinker* | ~23GB, comfortable | Current-gen hybrid reasoner. Won the eval's hard-reasoning 4/4. Kept for that lane + local sensitive-data reasoning. |
+| Qwen3-Coder-Next (80B MoE) | ✗ too tight | Tops open agentic-coding benchmarks, but 80B even at 4-bit crowds 48GB once KV cache + OS are counted — swap-thrash. A 64GB+ pick. |
+| Qwen3.6 27B *dense* | △ fits, slower | Higher per-token quality, but dense = full 27B every token → slower. The MoE's speed-per-GB wins for agent loops. |
+| Qwen3.6 `…-coding-mxfp8` / `-nvfp4` | ✗ wrong hardware | Coding-tuned quants ship in NVIDIA microscaling formats (FP8/FP4) for Blackwell datacenter GPUs — not Apple Metal. The default quant is the Mac-safe one. |
+| Gemma 4 26B-A4B (MoE) | ✅ fits | Reasonable non-Qwen alternative. Passed over because Qwen leads open agentic-coding and the toolchain was already tuned for it — revisit if Qwen regresses. |
+| Smaller (7–8B, e.g. `llama3.1:8b`) | ✅ trivially | Fast, fine for trivial edits, kept around — but weak at multi-step agent work. |
+| Kimi K2.7 Code | ✗ not local | Cloud-only (~1T params) and billed — sending code off-machine for a fee breaks the sandbox's two core promises. Out of scope by design. |
+
+Other families (DeepSeek-Coder, Codestral) are reasonable too; Qwen stays the
+base because it currently leads open agentic-coding and the setup is tuned for it.
 
 ### Agent: pi — vs Claude Code, Aider, Cursor, OpenHands
 
@@ -190,8 +226,12 @@ nono audit                      # what did the last sandboxed run touch
 
 # Model management
 ollama list                                       # installed models
-ollama create qwen3-coder-64k -f Modelfile        # rebuild the 64K variant
-# inside pi:  /model   to switch models,  /exit   to quit
+ollama create qwen3.6-64k -f Modelfile            # (re)build the thinker
+printf 'FROM qwen3-coder:30b\nPARAMETER num_ctx 65536\n' | ollama create qwen3-coder-64k -f -   # the coder
+# inside pi:  /model   to switch coder <-> thinker,  /exit   to quit
+
+# Run the model eval (proves the coder/thinker split — see eval/)
+cd eval && tsx run-eval.ts
 ```
 
 ## Verifying the sandbox
@@ -234,6 +274,9 @@ access, and "Operation not permitted" on the canary is your proof it didn't.
 
 ## Hardware notes
 
-Runs on Apple Silicon with 48GB+ unified memory. `qwen3-coder-64k` ≈ 18GB
-weights + ~6GB KV cache at 64K context — comfortable, with room for the OS and
-a browser. More RAM lets you raise `num_ctx` or run larger models.
+Runs on Apple Silicon with 48GB+ unified memory. One model is resident at a time
+(`/model` swaps them): the coder `qwen3-coder-64k` loads to ~24GB at 64K (very
+comfortable); the thinker `qwen3.6-64k` to ~28GB (fits with room for the OS, but
+close heavy apps for big thinker runs). If memory gets tight on the thinker, drop
+`num_ctx` or stay on the coder. More RAM (64GB+) would open up larger models like
+Qwen3-Coder-Next (80B MoE). Measured speeds: coder ~43 tok/s, thinker ~20 tok/s.
