@@ -24,23 +24,29 @@ for the split and which alternatives were rejected.
 | Ollama 0.24 | Local inference, OpenAI-compatible API on `localhost:11434` | already installed |
 | `qwen3-coder-64k` | **The coder** (fast default) — Qwen3-Coder 30B-A3B, 64K ctx | built from `Modelfile` |
 | `qwen3.6-64k` | **The thinker** (hard reasoning) — Qwen3.6 35B-A3B, 64K ctx | built from `Modelfile` |
-| [pi](https://pi.dev) 0.79 | Coding agent CLI, pointed at Ollama | `npm i -g --ignore-scripts @earendil-works/pi-coding-agent` |
+| `llama3.1:8b` | The router's classifier (pinned resident, ~5GB) | already pulled |
+| [pi](https://pi.dev) 0.79 | Coding agent CLI, pointed at the router | `npm i -g --ignore-scripts @earendil-works/pi-coding-agent` |
+| router | Localhost proxy (`:11500`) that auto-picks coder vs thinker per task | `router/` in this repo (TS) |
 
 ## Daily use
 
 ```sh
 cd <your-project>
-pi-safe                  # /opt/homebrew/bin/pi-safe:
-                         # nono run --profile pi --allow-cwd -- pi --provider ollama --model qwen3-coder-64k
+pi-safe                  # auto-routes coder <-> thinker via the local router
+PI_NO_ROUTER=1 pi-safe   # bypass the router, run the fast coder directly
 ```
 
-Starts on the fast **coder**. Inside pi, `/model` switches to `qwen3.6-64k` (the
-**thinker**) or `qwen2.5:32b` (smaller fallback). All inference is local — zero
+`pi-safe` **auto-routes**: it spawns the router proxy (`:11500`) if needed, then
+runs pi against `--model auto`. The router classifies each task and picks the
+fast **coder** for everyday work or the **thinker** for hard reasoning — see
+[Which model when](#which-model-when). Inside pi, `/model` still switches by hand
+(`qwen3-coder-64k`, `qwen3.6-64k`, `qwen2.5:32b`). All inference is local — zero
 API cost, nothing leaves the machine.
 
 ### Which model when
 
-The eval ([eval/RESULTS.md](eval/RESULTS.md)) measured where each one wins:
+The eval ([eval/RESULTS.md](eval/RESULTS.md)) measured where each one wins; the
+[router](docs/router-plan.md) now applies this split automatically:
 
 | Use | Model | Why |
 |---|---|---|
@@ -48,10 +54,12 @@ The eval ([eval/RESULTS.md](eval/RESULTS.md)) measured where each one wins:
 | Hard multi-step reasoning, logic/math, tricky problems | **`qwen3.6-64k`** (thinker) | uniquely solves the reasoning traps the coder fails — but slower & verbose |
 | Local reasoning over sensitive data | **`qwen3.6-64k`** (thinker) | strongest reasoning, and it never leaves the machine |
 
-Rule of thumb: **default to the coder; reach for the thinker only when a task
-genuinely needs deep reasoning.** The thinker is 2× slower, ~19× more verbose,
-and can run away — don't use it for routine work. (Automating this choice is the
-[router](docs/router-spec.md), greenlit by the eval but not yet built.)
+The router defaults to the coder and escalates to the thinker only when a task
+genuinely needs deep reasoning (the thinker is 2× slower, ~19× more verbose, and
+can run away — so a wall-clock leash falls back to the coder if it does). Force a
+model per message with `/think` or `/code`. To see how any prompt would route:
+`tsx router/try.ts "your prompt"`. Full design in
+[docs/router-plan.md](docs/router-plan.md).
 
 New here? Try the 5-minute worked example:
 **[examples/vault-linter](examples/vault-linter)** — have the sandboxed agent
@@ -91,8 +99,10 @@ Useful nono commands: `nono audit` (what did the agent touch),
 
 ## Config files
 
-- `~/.config/nono/profiles/pi.json` — sandbox profile
-- `~/.pi/agent/models.json` — pi → Ollama provider config
+- `~/.config/nono/profiles/pi.json` — sandbox profile (allows `localhost:11434` Ollama + `:11500` router)
+- `~/.pi/agent/models.json` — pi providers: `ollama` (direct) + `router` (the `auto` model on `:11500`)
+- `/opt/homebrew/bin/pi-safe` — launcher: auto-spawns the router then runs pi on `--model auto` (`PI_NO_ROUTER=1` bypasses)
+- `./router/` — the router proxy (TS): `server.ts`, `decide.ts`, `hysteresis.ts`; `try.ts` to test routing
 - `./Modelfile` — rebuilds the 64K-context **thinker**: `ollama create qwen3.6-64k -f Modelfile`. The header comments also show the one-liner that builds the **coder** (`qwen3-coder-64k`).
 
 ## Memory budget

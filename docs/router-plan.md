@@ -3,6 +3,13 @@
 Companion to [router-spec.md](router-spec.md) (the why + decision gate, passed).
 This is the locked architecture and build sequence.
 
+> **Status: BUILT 2026-06-14.** All five phases shipped in `router/`. Phase 1
+> streaming pass-through (curl-verified), Phase 2 decider (routing fixtures
+> 10/10), Phase 3 hysteresis (5→1 reloads) + thinker leash + coder fallback,
+> Phase 4 pi-safe auto-spawn + nono `:11500` (sandbox canary re-passed). The one
+> unproven path is a full *interactive* pi session through the router — pi is a
+> TUI that can't be driven headlessly; everything beneath it is verified.
+
 ## Locked decisions (architecting session, 2026-06-13)
 
 | Decision | Choice | Why |
