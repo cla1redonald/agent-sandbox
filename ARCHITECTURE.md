@@ -40,13 +40,16 @@ passwords, or the rest of my system.
 │   │           │                                    │     │
 │   │           ▼  asks the model what to do          │     │
 │   │  ┌──────────────────────────────────────┐      │     │
-│   │  │  Ollama  →  qwen3-coder-64k (default) │      │     │
-│   │  │      or    qwen3.6-64k  (the thinker) │      │     │
-│   │  │  Local inference on localhost:11434   │      │     │
+│   │  │  router :11500  (classify, pick model)│      │     │
+│   │  │     │                                  │      │     │
+│   │  │     ▼  Ollama on localhost:11434       │      │     │
+│   │  │   qwen3-coder-64k (coder, default)     │      │     │
+│   │  │   qwen3.6-64k     (thinker, hard)      │      │     │
+│   │  │   llama3.1:8b     (router classifier)  │      │     │
 │   │  └──────────────────────────────────────┘      │     │
 │   └───────────────────────────────────────────────┘     │
 │                                                          │
-│  Allowed: the working folder, ~/.pi, localhost Ollama    │
+│  Allowed: the working folder, ~/.pi, localhost 11434+11500│
 │  Denied:  SSH keys, Keychain, ~/.zshrc, browser data,    │
 │           shell history, everything outside the folder   │
 └─────────────────────────────────────────────────────────┘
@@ -124,8 +127,12 @@ verbose (95 vs 1,780 tokens/task), with 0 timeouts. The thinker uniquely solves
 the hard-reasoning traps (bat-and-ball, non-greedy coins) the coder fails — but
 it's slower, far more verbose, *worse* on some easy tasks (it failed LIS), and
 ran away to a timeout once. Neither dominates → keep both, default to the coder,
-escalate to the thinker only for genuinely hard reasoning. Automating that choice
-is the [router](../docs/router-spec.md) (greenlit by the eval, not yet built).
+escalate to the thinker only for genuinely hard reasoning. That choice is now
+automated by the [router](../docs/router-plan.md) — a localhost proxy (`:11500`)
+that classifies each request (override → heuristic → an always-on `llama3.1:8b`)
+and picks the model, with hysteresis to resist the ~20s reload and a wall-clock
+leash that falls back to the coder if the thinker runs away. `pi-safe` routes
+through it by default; `PI_NO_ROUTER=1` bypasses to the direct coder.
 
 **Discovery worth recording:** Qwen3.6 *thinks by default* and `num_predict`
 does **not** cap thinking tokens, so it can monologue for minutes on a trivial
@@ -172,22 +179,25 @@ sandbox is what makes running *either* autonomously safe.
 
 ## How a run flows
 
-1. I `cd` into a project and run `pi-safe`.
-2. `pi-safe` launches **nono**, which applies the `pi` security profile (a
-   Seatbelt sandbox) and then starts **pi** *inside* that sandbox.
-3. **pi** reads my task, and for each step asks **qwen3-coder-64k** (via
-   **Ollama** on localhost) what to do.
-4. pi carries out the steps — but every file read/write and network call is
+1. I `cd` into a project and run `pi-safe`. It ensures the **router** is up
+   (auto-spawning it on `:11500` if needed), then launches **nono**, which
+   applies the `pi` Seatbelt profile and starts **pi** *inside* that sandbox.
+2. **pi** sends each step to the router (`--model auto`). The router classifies
+   it and forwards to **qwen3-coder-64k** (coder) or **qwen3.6-64k** (thinker)
+   via **Ollama** on localhost, applying hysteresis + the thinker leash.
+3. pi carries out the steps — but every file read/write and network call is
    policed by nono. Anything outside the allowed list is denied by the kernel.
+   (`PI_NO_ROUTER=1 pi-safe` skips the router and uses the coder directly.)
 
 ## Config files (copies in `config/`, live locations below)
 
 | Purpose | Lives at | Copy in repo |
 |---|---|---|
 | Sandbox security profile | `~/.config/nono/profiles/pi.json` | `config/nono-pi-profile.json` |
-| pi → Ollama provider wiring | `~/.pi/agent/models.json` | `config/pi-models.json` |
-| Launcher script | `/opt/homebrew/bin/pi-safe` | `config/pi-safe` |
+| pi provider wiring (`ollama` direct + `router`) | `~/.pi/agent/models.json` | `config/pi-models.json` |
+| Launcher (auto-spawns router) | `/opt/homebrew/bin/pi-safe` | `config/pi-safe` |
 | Model definition (64K context) | this repo | `Modelfile` |
+| Router proxy (`:11500`) | runs from this repo | `router/` |
 
 ## What the sandbox allows vs denies
 
@@ -195,7 +205,9 @@ The `pi` profile extends nono's built-in `node-dev` → `default` profiles.
 
 **Allowed:** read+write the folder you launch from; `~/.pi` (agent state);
 read-only `~/.gitconfig`; Node/Homebrew toolchains; network via nono's
-filtering proxy (dev domains like GitHub/npm) plus `localhost:11434` for Ollama.
+filtering proxy (dev domains like GitHub/npm) plus `localhost:11434` (Ollama) and
+`localhost:11500` (the router). Verified 2026-06-14: opening `:11500` did **not**
+widen file access — the canary test still denies SSH keys, `.zshrc`, Keychain.
 
 **Denied (by the `default` base):** credential files, macOS Keychain, browser
 data, shell history, shell config files (`.zshrc` etc.), dangerous commands,

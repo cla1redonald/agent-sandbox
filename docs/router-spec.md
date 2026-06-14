@@ -1,6 +1,7 @@
-# Model Router — spec (GREENLIT, not yet built)
+# Model Router — spec (BUILT)
 
-> **Status: greenlit by the eval (2026-06-13), not yet built.** The eval
+> **Status: built 2026-06-14** (`router/`, phases 1–4; see
+> [router-plan.md](router-plan.md) for the build log). Greenlit by the eval (2026-06-13): the eval
 > ([eval/RESULTS.md](../eval/RESULTS.md)) showed a real, useful split: the THINKER
 > won the reasoning-hard tasks **4/4** where the CODER managed only **2/4** (it
 > fell for the bat-and-ball and non-greedy-coin traps), while the CODER wins all
