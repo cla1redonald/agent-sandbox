@@ -128,7 +128,7 @@ the hard-reasoning traps (bat-and-ball, non-greedy coins) the coder fails — bu
 it's slower, far more verbose, *worse* on some easy tasks (it failed LIS), and
 ran away to a timeout once. Neither dominates → keep both, default to the coder,
 escalate to the thinker only for genuinely hard reasoning. That choice is now
-automated by the [router](../docs/router-plan.md) — a localhost proxy (`:11500`)
+automated by the [router](docs/router-plan.md) — a localhost proxy (`:11500`)
 that classifies each request (override → heuristic → an always-on `llama3.1:8b`)
 and picks the model, with hysteresis to resist the ~20s reload and a wall-clock
 leash that falls back to the coder if the thinker runs away. `pi-safe` routes

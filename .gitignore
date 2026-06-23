@@ -9,3 +9,9 @@ dist/
 
 # eval scratch
 eval/.tmp/
+
+# Environment / secrets
+.env
+.env.local
+.env.*.local
+*.pem
